@@ -8,19 +8,27 @@ test.describe('Safe internal link crawl', () => {
     test(`${demo.name} – crawl internal links safely`, async ({ page }) => {
       test.setTimeout(180000);
 
-      const result: LinkValidationSummary =
-        await crawlInternalLinks(page, demo.baseUrl);
+      const dryRun = process.env.CRAWL_DRY_RUN === 'true';
 
-      console.log(
-        `Crawl summary for ${demo.name}: ` +
-        `checked=${result.checked}, ` +
-        `failed=${result.failed}, ` +
-        `skipped=${result.skipped}`
-      );
+      const result: LinkValidationSummary =
+        await crawlInternalLinks(page, demo.baseUrl, { dryRun });
+
+      console.log(`Crawl summary for ${demo.name}`);
+      if (dryRun) {
+        console.log('- mode: dry-run (discover only)');
+      }
+      console.log(`- checked: ${result.checked}`);
+      console.log(`- failed: ${result.failed}`);
+      console.log(`- skipped: ${result.skipped}`);
 
       if (result.failures.length) {
         console.log('Failures:');
         result.failures.forEach(f => console.log(` - ${f}`));
+      }
+
+      if (result.notes?.length) {
+        console.log('Notes:');
+        result.notes.forEach(n => console.log(` - ${n}`));
       }
 
       expect(result.checked).toBeGreaterThan(0);

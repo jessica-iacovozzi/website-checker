@@ -37,10 +37,13 @@ export const DEMOS = [
 ];
 
 export const CRAWL_LIMITS = {
-  MAX_PAGES: 20,          // absolute hard stop
-  MAX_DEPTH: 2,           // homepage -> section -> leaf
-  DELAY_MS: 1000,          // polite pause between pages
-  MAX_FAILURES: 5         // stop early if things go bad
+  MAX_PAGES: 50,             // absolute hard stop (polite)
+  MAX_DEPTH: 3,              // homepage -> section -> leaf
+  DELAY_MS: 1200,            // pause between pages
+  MAX_FAILURES: 6,           // stop early if things go bad
+  NAVIGATION_TIMEOUT_MS: 5000,
+  RETRY_COUNT: 1,
+  DRY_RUN_NOTE_LIMIT: 50
 };
 
 export const ALLOWED_PATH_PREFIXES = [
@@ -57,5 +60,10 @@ export const BLOCKED_PATH_PREFIXES = [
   '/account',
   '/search',
   '/customer_authentication',
-  '/login'
+  '/login',
+  '/orders',
+  '/gift_cards',
+  '/policies',
+  '/admin',
+  '/apps'
 ];

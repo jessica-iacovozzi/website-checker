@@ -1,22 +1,67 @@
 import { CrawlItem } from "../types";
 import { Page } from "@playwright/test";
-import { LinkValidationSummary } from './validateInternalLinks';
+import { LinkValidationSummary } from "./validateInternalLinks";
 import { CRAWL_LIMITS } from "./constants";
 import { normalizeUrl, isAllowedPath } from "../helpers/pathHelper";
 
+type CrawlOptions = {
+  dryRun?: boolean;
+};
+
+type VisitResult = {
+  status?: number;
+  contentType?: string;
+};
+
 export async function crawlInternalLinks(
   page: Page,
-  startUrl: string
+  startUrl: string,
+  options: CrawlOptions = {}
 ): Promise<LinkValidationSummary> {
+  const { dryRun = false } = options;
+
   const summary: LinkValidationSummary = {
     checked: 0,
     failed: 0,
     skipped: 0,
-    failures: []
+    failures: [],
+    notes: [],
   };
 
   const queue: CrawlItem[] = [{ url: startUrl, depth: 0 }];
   const visited = new Set<string>();
+
+  const visit = async (targetUrl: string): Promise<VisitResult> => {
+    let lastStatus: number | undefined;
+    for (let attempt = 0; attempt <= CRAWL_LIMITS.RETRY_COUNT; attempt++) {
+      try {
+        const response = await page.goto(targetUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: CRAWL_LIMITS.NAVIGATION_TIMEOUT_MS,
+        });
+
+        lastStatus = response?.status();
+
+        if (lastStatus && lastStatus >= 500 && attempt < CRAWL_LIMITS.RETRY_COUNT) {
+          await page.waitForTimeout(200);
+          continue;
+        }
+
+        return {
+          status: lastStatus,
+          contentType: response?.headers()?.["content-type"],
+        };
+      } catch {
+        if (attempt < CRAWL_LIMITS.RETRY_COUNT) {
+          await page.waitForTimeout(200);
+          continue;
+        }
+        throw new Error("navigation failed");
+      }
+    }
+
+    return { status: lastStatus };
+  };
 
   while (
     queue.length &&
@@ -34,36 +79,38 @@ export async function crawlInternalLinks(
     summary.checked++;
 
     try {
-      const response = await page.goto(url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 5000
-      });
+      const { status, contentType } = await visit(url);
 
-      if (!response || response.status() >= 400) {
+      if (!status || status >= 400) {
         summary.failed++;
-        summary.failures.push(`${url} → HTTP ${response?.status()}`);
+        summary.failures.push(
+          `${url} → HTTP ${status ?? "unknown"}${contentType ? ` (${contentType})` : ""}`
+        );
         continue;
       }
 
-      if (depth >= CRAWL_LIMITS.MAX_DEPTH) {
+      if (depth >= CRAWL_LIMITS.MAX_DEPTH || dryRun) {
+        if (dryRun && summary.notes && summary.notes.length < CRAWL_LIMITS.DRY_RUN_NOTE_LIMIT) {
+          summary.notes.push(`Discovered (not crawled): ${url}`);
+        }
         continue;
       }
 
       // Extract next internal links
       const links = await page.$$eval(
-        'a[href]',
+        "a[href]",
         (anchors, base) =>
           anchors
-            .map(a => a.getAttribute('href'))
-            .filter(href => {
+            .map((a) => a.getAttribute("href"))
+            .filter((href) => {
               if (!href) return false;
-              if (href.startsWith('#')) return false;
-              if (href.startsWith('javascript:')) return false;
-              if (href.startsWith('mailto:')) return false;
+              if (href.startsWith("#")) return false;
+              if (href.startsWith("javascript:")) return false;
+              if (href.startsWith("mailto:")) return false;
 
               try {
-                const url = new URL(href, base);
-                return url.origin === new URL(base).origin;
+                const currentUrl = new URL(href, base);
+                return currentUrl.origin === new URL(base).origin;
               } catch {
                 return false;
               }
@@ -72,9 +119,7 @@ export async function crawlInternalLinks(
       );
 
       for (const href of links) {
-        const nextUrl = normalizeUrl(
-          new URL(href!, startUrl)
-        );
+        const nextUrl = normalizeUrl(new URL(href!, startUrl));
 
         const pathname = new URL(nextUrl).pathname;
 
@@ -85,11 +130,17 @@ export async function crawlInternalLinks(
 
         if (!visited.has(nextUrl)) {
           queue.push({ url: nextUrl, depth: depth + 1 });
+          if (dryRun && summary.notes && summary.notes.length < CRAWL_LIMITS.DRY_RUN_NOTE_LIMIT) {
+            summary.notes.push(`Queued (not visited): ${nextUrl}`);
+          }
         }
       }
-    } catch {
+    } catch (error) {
       summary.failed++;
       summary.failures.push(`${url} → navigation failed`);
+      if (summary.notes && summary.notes.length < CRAWL_LIMITS.DRY_RUN_NOTE_LIMIT) {
+        summary.notes.push(`Error at ${url}: ${String((error as Error)?.message ?? error)}`);
+      }
     }
 
     // Rate limiting

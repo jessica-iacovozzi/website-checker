@@ -30,6 +30,7 @@ Fill `.env` with your target site values.
 | `SHOPIFY_STORE_NAME` | Display name for logs |
 | `SHOPIFY_STORE_BASE_URL` | Base URL to test (e.g., `https://example.com`) |
 | `SHOPIFY_STORE_PRODUCT_PATH` | Product path for product-page link checks (e.g., `/collections/all`) |
+| `CRAWL_DRY_RUN` | Set to `true` to only discover links (no visits) for minimal load |
 
 > `.env` is git-ignored; keep real URLs out of commits.
 
@@ -46,8 +47,9 @@ Reports: `playwright-report/` (HTML) and `test-results/` (artifacts).
 
 ## Configuration knobs
 - Targets: `DEMOS` in `tests/utils/constants.ts` (environment-driven) @tests/utils/constants.ts#5-37
-- Crawl limits (depth, delay, max pages, fail-fast): `CRAWL_LIMITS` @tests/utils/constants.ts#39-44
-- Allowed/blocked path prefixes: `ALLOWED_PATH_PREFIXES`, `BLOCKED_PATH_PREFIXES` @tests/utils/constants.ts#46-60
+- Crawl limits (depth, delay, max pages, fail-fast, retry): `CRAWL_LIMITS` @tests/utils/constants.ts#39-47
+- Allowed/blocked path prefixes: `ALLOWED_PATH_PREFIXES`, `BLOCKED_PATH_PREFIXES` @tests/utils/constants.ts#49-68
+- Dry-run mode: set `CRAWL_DRY_RUN=true` to list links without visiting (safest before a client demo).
 
 To add another target, add a new block in `constants.ts` and new env keys, then set them in `.env`.
 

@@ -6,6 +6,7 @@ export interface LinkValidationSummary {
   failed: number;
   skipped: number;
   failures: string[];
+  notes?: string[];
 }
 
 export async function validateInternalLinks(
@@ -17,6 +18,7 @@ export async function validateInternalLinks(
     failed: 0,
     skipped: 0,
     failures: [],
+    notes: [],
   };
 
   await page.goto(pageUrl, { waitUntil: "domcontentloaded" });
